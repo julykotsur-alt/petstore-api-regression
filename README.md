@@ -33,7 +33,7 @@ newman run collections/petstore-collection.json
 
 ## Запуск у GitHub Actions
 
-Вкладка **Actions** → **API regression (Newman)** → **Run workflow**. Також запускається автоматично при зміні колекції в `main`. JSON-звіт можна завантажити з артефактів запуску.
+Вкладка **Actions** → **API regression (Newman)** → **Run workflow**. Також запускається автоматично при зміні колекції в `main`. JSON- і HTML-звіти можна завантажити з артефактів запуску. HTML-звіт останнього прогону з `main` публікується на GitHub Pages: https://julykotsur-alt.github.io/petstore-api-regression/
 
 ## Налаштування задачі в Claude
 

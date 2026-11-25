@@ -8,6 +8,15 @@ on:
       - ".github/workflows/newman.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: newman-pages
+  cancel-in-progress: false
+
 jobs:
   newman:
     runs-on: ubuntu-latest
@@ -19,13 +28,16 @@ jobs:
           node-version: "20"
 
       - name: Install Newman
-        run: npm install -g newman@6
+        run: npm install -g newman@6 newman-reporter-htmlextra@1
 
       - name: Run collection
         run: |
+          mkdir -p site
           newman run collections/petstore-collection.json \
-            -r cli,json \
-            --reporter-json-export newman-report.json
+            -r cli,json,htmlextra \
+            --reporter-json-export newman-report.json \
+            --reporter-htmlextra-export site/index.html \
+            --reporter-htmlextra-title "Petstore API regression (Newman)"
 
       - name: Upload JSON report
         if: always()
@@ -33,3 +45,28 @@ jobs:
         with:
           name: newman-report
           path: newman-report.json
+
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: newman-html-report
+          path: site/index.html
+
+      - name: Upload Pages artifact
+        if: always() && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  publish-report:
+    needs: newman
+    if: always() && github.ref == 'refs/heads/main' && needs.newman.result != 'cancelled'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Deploy HTML report to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4

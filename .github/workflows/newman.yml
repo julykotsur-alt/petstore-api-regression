@@ -6,7 +6,15 @@ on:
     paths:
       - "collections/**"
       - ".github/workflows/newman.yml"
+  schedule:
+    # Every Monday 07:00 UTC (09:00 Kyiv in winter, 10:00 in summer)
+    - cron: "0 7 * * 1"
   workflow_dispatch:
+    inputs:
+      jira_gate:
+        description: "Run only if Jira has api-testing tickets in Ready for QA (same check as the weekly schedule)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -17,8 +25,56 @@ concurrency:
   group: newman-pages
   cancel-in-progress: false
 
+env:
+  JIRA_BASE_URL: https://julykotsur.atlassian.net
+  JIRA_JQL: 'labels in (api_testing, api-testing) AND status = "Ready for QA" ORDER BY key'
+
 jobs:
+  jira-gate:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - name: Check Jira for tickets ready for API testing
+        id: check
+        env:
+          GATE: ${{ github.event_name == 'schedule' || inputs.jira_gate == true }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+        run: |
+          if [ "$GATE" != "true" ]; then
+            echo "Triggered by ${{ github.event_name }} without Jira gate: running regression."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -z "$JIRA_EMAIL" ] || [ -z "$JIRA_API_TOKEN" ]; then
+            echo "::error::JIRA_EMAIL / JIRA_API_TOKEN secrets are not set, cannot check Jira."
+            exit 1
+          fi
+          body=$(jq -n --arg jql "$JIRA_JQL" '{jql: $jql, fields: ["summary", "status"], maxResults: 50}')
+          resp=$(curl -sS --fail-with-body -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
+            -H "Accept: application/json" -H "Content-Type: application/json" \
+            -X POST "$JIRA_BASE_URL/rest/api/3/search/jql" -d "$body")
+          count=$(echo "$resp" | jq '.issues | length')
+          {
+            echo "### Jira gate"
+            echo ""
+            echo "JQL: \`$JIRA_JQL\`"
+            echo ""
+            echo "Tickets found: **$count**"
+            echo "$resp" | jq -r --arg base "$JIRA_BASE_URL" '.issues[] | "- [\(.key)](\($base)/browse/\(.key)) \(.fields.summary)"'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$count" -gt 0 ]; then
+            echo "Found $count ticket(s) in Ready for QA: running regression."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No api-testing tickets in Ready for QA: skipping regression."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
   newman:
+    needs: jira-gate
+    if: needs.jira-gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -61,7 +117,7 @@ jobs:
 
   publish-report:
     needs: newman
-    if: always() && github.ref == 'refs/heads/main' && needs.newman.result != 'cancelled'
+    if: always() && github.ref == 'refs/heads/main' && (needs.newman.result == 'success' || needs.newman.result == 'failure')
     runs-on: ubuntu-latest
     environment:
       name: github-pages

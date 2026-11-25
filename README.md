@@ -35,6 +35,19 @@ newman run collections/petstore-collection.json
 
 Вкладка **Actions** → **API regression (Newman)** → **Run workflow**. Також запускається автоматично при зміні колекції в `main`. JSON- і HTML-звіти можна завантажити з артефактів запуску. HTML-звіт останнього прогону з `main` публікується на GitHub Pages: https://julykotsur-alt.github.io/petstore-api-regression/
 
+### Щотижневий запуск за Jira
+
+Щопонеділка о 07:00 UTC job `jira-gate` шукає в Jira (`julykotsur.atlassian.net`) тікети з лейблом `api_testing` або `api-testing` у статусі **Ready for QA**. Якщо такі є, запускається регресія і оновлюється HTML-звіт; якщо немає, прогін пропускається. Список знайдених тікетів видно в summary запуску.
+
+Потрібні секрети репозиторію (**Settings → Secrets and variables → Actions**):
+
+| Секрет | Що це |
+|---|---|
+| `JIRA_EMAIL` | email акаунта Atlassian |
+| `JIRA_API_TOKEN` | API-токен з https://id.atlassian.com/manage-profile/security/api-tokens |
+
+Перевірити той самий фільтр вручну: **Run workflow** з увімкненим `jira_gate`.
+
 ## Налаштування задачі в Claude
 
 1. Підключити Postman до Claude: claude.ai/customize/connectors.

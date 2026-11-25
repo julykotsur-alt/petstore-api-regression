@@ -51,6 +51,16 @@ jobs:
             echo "::error::JIRA_EMAIL / JIRA_API_TOKEN secrets are not set, cannot check Jira."
             exit 1
           fi
+          # Jira Cloud may answer bad credentials as an anonymous user (200, zero issues),
+          # so verify the login explicitly before trusting an empty search result.
+          me_status=$(curl -sS -o me.json -w "%{http_code}" -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
+            -H "Accept: application/json" "$JIRA_BASE_URL/rest/api/3/myself")
+          if [ "$me_status" != "200" ] || [ "$(jq -r '.accountId // empty' me.json)" = "" ]; then
+            echo "::error::Jira login failed (HTTP $me_status). Check that JIRA_EMAIL is the Atlassian login of the account that created JIRA_API_TOKEN."
+            exit 1
+          fi
+          echo "Authenticated to Jira as: $(jq -r '.displayName' me.json)"
+          rm -f me.json
           body=$(jq -n --arg jql "$JIRA_JQL" '{jql: $jql, fields: ["summary", "status"], maxResults: 50}')
           resp=$(curl -sS --fail-with-body -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
             -H "Accept: application/json" -H "Content-Type: application/json" \

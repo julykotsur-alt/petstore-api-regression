@@ -1,0 +1,376 @@
+{
+  "info": {
+    "_postman_id": "e81c4598-f4e6-44f3-9b3c-9b1aa9e0ed25",
+    "name": "Swagger Petstore - Pet CRUD Workflow",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Навчальна регресійна колекція: Create -> Get -> Update -> Get -> Delete -> Verify deletion. Цільовий API: публічний Swagger Petstore (petstore3.swagger.io), авторизація не потрібна."
+  },
+  "item": [
+    {
+      "name": "Pet CRUD Workflow",
+      "item": [
+        {
+          "name": "1. Create Pet (POST /pet)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Unique pet ID for each run: millisecond timestamp * 1000 + random 0-999.",
+                  "// Stays below Number.MAX_SAFE_INTEGER (2^53 - 1), so it is a valid int64 and exact in JavaScript.",
+                  "const id = Date.now() * 1000 + Math.floor(Math.random() * 1000);",
+                  "pm.collectionVariables.set('petId', String(id));",
+                  "pm.collectionVariables.set('petName', 'qa-pet-' + id);",
+                  "pm.collectionVariables.set('petNameUpdated', 'qa-pet-' + id + '-updated');",
+                  "console.log('Generated petId:', id);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const petSchema = JSON.parse(pm.collectionVariables.get('petSchema'));",
+                  "",
+                  "pm.test('Status code is 200 (documented: Successful operation)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "if (pm.response.code !== 200) {",
+                  "    // Stop the run: later steps depend on a created pet.",
+                  "    postman.setNextRequest(null);",
+                  "    return;",
+                  "}",
+                  "",
+                  "const pet = pm.response.json();",
+                  "",
+                  "pm.test('Response body matches the Pet schema', function () {",
+                  "    pm.response.to.have.jsonSchema(petSchema);",
+                  "});",
+                  "",
+                  "pm.test('name and status match the request', function () {",
+                  "    pm.expect(pet.name).to.eql(pm.collectionVariables.get('petName'));",
+                  "    pm.expect(pet.status).to.eql('available');",
+                  "});",
+                  "",
+                  "pm.test('Response contains an id to reuse in the workflow', function () {",
+                  "    pm.expect(pet).to.have.property('id');",
+                  "});",
+                  "",
+                  "// The response is the source of truth: save the returned id for every later step.",
+                  "if (pet.id !== undefined && pet.id !== null) {",
+                  "    pm.collectionVariables.set('petId', String(pet.id));",
+                  "} else {",
+                  "    postman.setNextRequest(null);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/pet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pet"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": {{petId}},\n  \"name\": \"{{petName}}\",\n  \"category\": {\n    \"id\": 1,\n    \"name\": \"Dogs\"\n  },\n  \"photoUrls\": [\n    \"https://example.com/photos/{{petId}}.jpg\"\n  ],\n  \"tags\": [\n    {\n      \"id\": 1,\n      \"name\": \"tag1\"\n    }\n  ],\n  \"status\": \"available\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "response": []
+        },
+        {
+          "name": "2. Get Pet by ID (GET /pet/{petId})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const petSchema = JSON.parse(pm.collectionVariables.get('petSchema'));",
+                  "",
+                  "pm.test('Status code is 200 (documented: successful operation)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response body matches the Pet schema', function () {",
+                  "    pm.response.to.have.jsonSchema(petSchema);",
+                  "});",
+                  "",
+                  "pm.test('Returned pet is the one created in step 1', function () {",
+                  "    const pet = pm.response.json();",
+                  "    pm.expect(String(pet.id)).to.eql(pm.collectionVariables.get('petId'));",
+                  "    pm.expect(pet.name).to.eql(pm.collectionVariables.get('petName'));",
+                  "    pm.expect(pet.status).to.eql('available');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/pet/{{petId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pet",
+                "{{petId}}"
+              ]
+            }
+          },
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "response": []
+        },
+        {
+          "name": "3. Update Pet (PUT /pet)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const petSchema = JSON.parse(pm.collectionVariables.get('petSchema'));",
+                  "",
+                  "pm.test('Status code is 200 (documented: Successful operation)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response body matches the Pet schema', function () {",
+                  "    pm.response.to.have.jsonSchema(petSchema);",
+                  "});",
+                  "",
+                  "pm.test('Response reflects the updated name and status', function () {",
+                  "    const pet = pm.response.json();",
+                  "    pm.expect(String(pet.id)).to.eql(pm.collectionVariables.get('petId'));",
+                  "    pm.expect(pet.name).to.eql(pm.collectionVariables.get('petNameUpdated'));",
+                  "    pm.expect(pet.status).to.eql('sold');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/pet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pet"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": {{petId}},\n  \"name\": \"{{petNameUpdated}}\",\n  \"category\": {\n    \"id\": 1,\n    \"name\": \"Dogs\"\n  },\n  \"photoUrls\": [\n    \"https://example.com/photos/{{petId}}.jpg\"\n  ],\n  \"tags\": [\n    {\n      \"id\": 1,\n      \"name\": \"tag1\"\n    }\n  ],\n  \"status\": \"sold\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "response": []
+        },
+        {
+          "name": "4. Get Pet after update (GET /pet/{petId})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const petSchema = JSON.parse(pm.collectionVariables.get('petSchema'));",
+                  "",
+                  "pm.test('Status code is 200 (documented: successful operation)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response body matches the Pet schema', function () {",
+                  "    pm.response.to.have.jsonSchema(petSchema);",
+                  "});",
+                  "",
+                  "pm.test('Persisted pet shows the updated name and status', function () {",
+                  "    const pet = pm.response.json();",
+                  "    pm.expect(String(pet.id)).to.eql(pm.collectionVariables.get('petId'));",
+                  "    pm.expect(pet.name).to.eql(pm.collectionVariables.get('petNameUpdated'));",
+                  "    pm.expect(pet.status).to.eql('sold');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/pet/{{petId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pet",
+                "{{petId}}"
+              ]
+            }
+          },
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "response": []
+        },
+        {
+          "name": "5. Delete Pet (DELETE /pet/{petId})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// The spec documents no response body for 200 'Pet deleted', so only the status code is asserted.",
+                  "pm.test('Status code is 200 (documented: Pet deleted)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/pet/{{petId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pet",
+                "{{petId}}"
+              ]
+            }
+          },
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "response": []
+        },
+        {
+          "name": "6. Verify deletion (GET /pet/{petId})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// GET /pet/{petId} documents 404 'Pet not found'. No response body schema is documented for 404, so only the status is asserted.",
+                  "pm.test('Status code is 404 (documented: Pet not found)', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/pet/{{petId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pet",
+                "{{petId}}"
+              ]
+            }
+          },
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://petstore3.swagger.io/api/v3"
+    },
+    {
+      "key": "petId",
+      "value": ""
+    },
+    {
+      "key": "petName",
+      "value": ""
+    },
+    {
+      "key": "petNameUpdated",
+      "value": ""
+    },
+    {
+      "key": "petSchema",
+      "value": "{\"type\":\"object\",\"required\":[\"name\",\"photoUrls\"],\"properties\":{\"id\":{\"type\":\"integer\"},\"name\":{\"type\":\"string\"},\"category\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\"},\"name\":{\"type\":\"string\"}}},\"photoUrls\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"tags\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\"},\"name\":{\"type\":\"string\"}}}},\"status\":{\"type\":\"string\",\"enum\":[\"available\",\"pending\",\"sold\"]}}}"
+    }
+  ]
+}

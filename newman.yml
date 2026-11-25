@@ -1,0 +1,35 @@
+name: API regression (Newman)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "collections/**"
+      - ".github/workflows/newman.yml"
+  workflow_dispatch:
+
+jobs:
+  newman:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Newman
+        run: npm install -g newman@6
+
+      - name: Run collection
+        run: |
+          newman run collections/petstore-collection.json \
+            -r cli,json \
+            --reporter-json-export newman-report.json
+
+      - name: Upload JSON report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: newman-report
+          path: newman-report.json
